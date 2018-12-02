@@ -1,8 +1,12 @@
-import React, { useReducer, useMemo, useState } from 'react';
+import React, { useReducer, useMemo, useEffect, useState } from 'react';
 import './App.css';
 
 import { Provider, Client, query, Connect } from 'urql';
+import PouchDB from 'pouchdb-browser';
+import debounce from 'lodash/debounce';
 
+const db = new PouchDB('rc');
+window.__db = db;
 
 const settingsReducer = (state, action) => {
   switch (action.type) {
@@ -12,22 +16,66 @@ const settingsReducer = (state, action) => {
       return {...state, username: action.payload};
     case 'repo':
       return {...state, repo: action.payload};
+    case 'init':
+    case 'update':
+      return action.payload;
     default:
       return state;
   }
 }
 
 const defaultSettings = {
+  _id: 'settings',
   apiKey: '',
   username: '',
   repo: '',
 }
 
-const App = () => {
-  const [showSettings, setShowSettings] = useState(false);
+
+const usePouchForSettings = (documentName: string = 'settings') => {
+  // TODO: pass reducer as arg
+  // TODO: pass default settings as arg?
+  // TODO: rename
   const [settings, dispatchSettings] = useReducer(settingsReducer, defaultSettings);
 
+  useEffect(async () => {
+    const storedDocument = await db.get(documentName);
+    if (!storedDocument) {
+      await db.put(defaultSettings);
+      const dbDoc = await db.get(documentName)
+      dispatchSettings({type: 'init', payload: dbDoc})
+    } else {
+      dispatchSettings({type: 'init', payload: storedDocument});
+    }
+  }, documentName);
 
+  const _saveState = async (state: *) => {
+    try {
+      const {_rev, ...localSettings} = state;
+      const latest = await db.get(documentName);
+      const doc = {...latest, ...localSettings};
+      await db.put(doc);
+    } catch (err) {
+      console.error('there was an error saving to pouch')
+      console.error(err || err.stack);
+    }
+  }
+
+  const saveState = debounce(_saveState, 2000);
+
+  const wrappedDispatch = async (action: *) => {
+    const newSettings = settingsReducer(settings, action);
+    dispatchSettings(action);
+    saveState(newSettings)
+  }
+  return [settings, wrappedDispatch];
+}
+
+const App = () => {
+  // const [settings, dispatchSettings] = useReducer(settingsReducer, defaultSettings);
+  const [settings, dispatchSettings] = usePouchForSettings('settings');
+
+  console.log('in component', {settings})
   const client = useMemo(() => new Client({
     url: 'https://api.github.com/graphql',
     fetchOptions: () => {
