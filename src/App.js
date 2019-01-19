@@ -1,4 +1,4 @@
-import React, {useReducer, useMemo, useEffect, useState} from 'react';
+import React, {useReducer, useMemo, useEffect} from 'react';
 import './App.css';
 
 import {Provider, Client, query, Connect} from 'urql';
@@ -16,8 +16,9 @@ const settingsReducer = (state, action) => {
       return {...state, username: action.payload};
     case 'repo':
       return {...state, repo: action.payload};
-    case 'init':
     case 'update':
+      return action.payload;
+    case '@@pouch/init':
       return action.payload;
     default:
       return state;
@@ -31,23 +32,23 @@ const defaultSettings = {
   repo: '',
 };
 
-const usePouchForSettings = (documentName: string = 'settings') => {
+const usePouchDBReducer = (reducerFn, defaultState, documentName: string) => {
   // TODO: pass reducer as arg
   // TODO: pass default settings as arg?
   // TODO: rename
-  const [settings, dispatchSettings] = useReducer(
-    settingsReducer,
-    defaultSettings,
+  const [reducerState, dispatchReducer] = useReducer(
+    reducerFn,
+    defaultState,
   );
 
   useEffect(async () => {
     const storedDocument = await db.get(documentName);
     if (!storedDocument) {
-      await db.put(defaultSettings);
+      await db.put(defaultState);
       const dbDoc = await db.get(documentName);
-      dispatchSettings({type: 'init', payload: dbDoc});
+      dispatchReducer({type: '@@pouch/init', payload: dbDoc});
     } else {
-      dispatchSettings({type: 'init', payload: storedDocument});
+      dispatchReducer({type: '@@pouch/init', payload: storedDocument});
     }
   }, documentName);
 
@@ -66,18 +67,16 @@ const usePouchForSettings = (documentName: string = 'settings') => {
   const saveState = debounce(_saveState, 2000);
 
   const wrappedDispatch = async (action: *) => {
-    const newSettings = settingsReducer(settings, action);
-    dispatchSettings(action);
+    const newSettings = reducerFn(reducerState, action);
+    dispatchReducer(action);
     saveState(newSettings);
   };
-  return [settings, wrappedDispatch];
+  return [reducerState, wrappedDispatch];
 };
 
 const App = () => {
-  // const [settings, dispatchSettings] = useReducer(settingsReducer, defaultSettings);
-  const [settings, dispatchSettings] = usePouchForSettings('settings');
+  const [settings, dispatchSettings] = usePouchDBReducer(settingsReducer, defaultSettings, 'settings');
 
-  console.log('in component', {settings});
   const client = useMemo(
     () =>
       new Client({
@@ -196,7 +195,7 @@ const Listing = ({repo, username}) => (
     {({fetching, loaded, error, data, refetch}) => (
       <div>
         {fetching && 'fetching...'}
-        {loaded && 'loaded!'}
+        {loaded && !fetching && 'loaded!'}
         {loaded && (
           <button type="button" onClick={() => refetch({skipCache: true})}>
             re-fetch data
