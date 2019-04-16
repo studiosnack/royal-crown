@@ -26,7 +26,6 @@ const settingsReducer = (state, action) => {
 };
 
 const defaultSettings = {
-  _id: 'settings',
   apiKey: '',
   username: '',
   repo: '',
@@ -42,15 +41,25 @@ const usePouchDBReducer = (reducerFn, defaultState, documentName: string) => {
   );
 
   useEffect(async () => {
-    const storedDocument = await db.get(documentName);
-    if (!storedDocument) {
-      await db.put(defaultState);
-      const dbDoc = await db.get(documentName);
-      dispatchReducer({type: '@@pouch/init', payload: dbDoc});
-    } else {
+    let storedDocument;
+    try {
+      storedDocument = await db.get(documentName);
+      dispatchReducer({type: '@@pouch/init', payload: storedDocument});
+    } catch (err) {
+      let response = await db.put({...defaultState,
+        _id: documentName
+      });
+      storedDocument = await db.get(documentName);
       dispatchReducer({type: '@@pouch/init', payload: storedDocument});
     }
-  }, documentName);
+    // if (!storedDocument) {
+    //   await db.put(defaultState);
+    //   const dbDoc = await db.get(documentName);
+    //   dispatchReducer({type: '@@pouch/init', payload: dbDoc});
+    // } else {
+    //   dispatchReducer({type: '@@pouch/init', payload: storedDocument});
+    // }
+  }, [documentName]);
 
   const _saveState = async (state: *) => {
     try {
