@@ -2,7 +2,9 @@
   "name": "royal-crown",
   "version": "0.1.0",
   "private": true,
+  "homepage": "https://studiosnack.github.io/royal-crown",
   "dependencies": {
+    "gh-pages": "^2.0.1",
     "lodash": "^4.17.11",
     "pouchdb-browser": "^7.0.0",
     "react": "^16.8.3",
@@ -11,6 +13,8 @@
     "urql": "^0.2.2"
   },
   "scripts": {
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
